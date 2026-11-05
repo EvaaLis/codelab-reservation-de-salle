@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from flask import Flask, redirect, render_template_string, request
 
 from base import ouvrir_base
@@ -18,6 +20,7 @@ PAGE = """
       <form method="post" action="/salles/{{ salle['id'] }}/supprimer" style="display:inline">
         <button>Supprimer</button>
       </form>
+      <a href="/salles/{{ salle['id'] }}/planning">Planning</a>
     </li>
   {% endfor %}
 </ul>
@@ -55,6 +58,30 @@ PAGE = """
   <button>Réserver</button>
 </form>
 """
+
+# Le HTML du planning d'une salle.
+PLANNING = """
+<h1>Planning de {{ salle["nom"] }}</h1>
+<p><a href="/">Retour</a></p>
+
+<form method="get">
+  <input name="date" type="date" value="{{ lundi }}">
+  <button>Voir la semaine</button>
+</form>
+
+{% for jour in jours %}
+  <h3>{{ jour["nom"] }} {{ jour["date"] }}</h3>
+  <ul>
+    {% for r in jour["reservations"] %}
+      <li>{{ r["debut"] }}-{{ r["fin"] }} – {{ r["personne"] }} ({{ r["participants"] }})</li>
+    {% else %}
+      <li>Libre</li>
+    {% endfor %}
+  </ul>
+{% endfor %}
+"""
+
+NOMS_JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 app = Flask(__name__)
 
@@ -148,6 +175,29 @@ def annuler(reservation_id):
     with ouvrir_base() as conn:
         conn.execute("DELETE FROM reservations WHERE id = ?", [reservation_id])
     return redirect("/")
+
+
+# Planning d'une salle sur la semaine (lundi au dimanche) contenant la date demandée.
+@app.get("/salles/<int:salle_id>/planning")
+def planning(salle_id):
+    jour = date.fromisoformat(request.args.get("date") or date.today().isoformat())
+    lundi = jour - timedelta(days=jour.weekday())
+    dimanche = lundi + timedelta(days=6)
+    with ouvrir_base() as conn:
+        salle = conn.execute("SELECT nom FROM salles WHERE id = ?", [salle_id]).fetchone()
+        if salle is None:
+            return "Salle inconnue.", 404
+        reservations = conn.execute(
+            "SELECT date, debut, fin, personne, participants FROM reservations"
+            " WHERE salle_id = ? AND date BETWEEN ? AND ? ORDER BY debut",
+            [salle_id, lundi.isoformat(), dimanche.isoformat()],
+        ).fetchall()
+    jours = []
+    for i, nom in enumerate(NOMS_JOURS):
+        d = (lundi + timedelta(days=i)).isoformat()
+        jours.append({"nom": nom, "date": d,
+                      "reservations": [r for r in reservations if r["date"] == d]})
+    return render_template_string(PLANNING, salle=salle, lundi=lundi.isoformat(), jours=jours)
 
 
 if __name__ == "__main__":

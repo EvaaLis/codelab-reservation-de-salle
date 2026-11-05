@@ -97,3 +97,23 @@ def test_annuler_reservation(client):
 def test_annuler_libere_le_creneau(client):
     client.post("/reservations/1/annuler")
     assert reserver(client, debut="10:00", fin="12:00").status_code == 302
+
+
+# Planning. Le 2026-11-09 est un lundi, le 2026-11-15 un dimanche.
+def page_planning(client, salle_id, jour):
+    return client.get(f"/salles/{salle_id}/planning?date={jour}").get_data(as_text=True)
+
+
+def test_planning_semaine_du_lundi_au_dimanche(client):
+    assert "Alice" in page_planning(client, 1, "2026-11-09")
+    assert "Alice" in page_planning(client, 1, "2026-11-15")
+    assert "Alice" not in page_planning(client, 1, "2026-11-08")
+    assert "Alice" not in page_planning(client, 1, "2026-11-16")
+
+
+def test_planning_affiche_seulement_la_salle(client):
+    assert "Alice" not in page_planning(client, 2, "2026-11-09")
+
+
+def test_planning_salle_inconnue(client):
+    assert client.get("/salles/99/planning").status_code == 404
