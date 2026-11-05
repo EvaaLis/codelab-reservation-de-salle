@@ -27,6 +27,21 @@ PAGE = """
   <input name="capacite" type="number" min="1" placeholder="Capacité" required>
   <button>Ajouter</button>
 </form>
+
+<h2>Réserver</h2>
+<form method="post" action="/reservations">
+  <select name="salle_id">
+    {% for salle in salles %}
+      <option value="{{ salle['id'] }}">{{ salle['nom'] }}</option>
+    {% endfor %}
+  </select>
+  <input name="personne" placeholder="Personne" required>
+  <input name="date" type="date" required>
+  <input name="debut" type="time" required>
+  <input name="fin" type="time" required>
+  <input name="participants" type="number" min="1" placeholder="Participants" required>
+  <button>Réserver</button>
+</form>
 """
 
 app = Flask(__name__)
@@ -72,6 +87,42 @@ def modifier_salle(salle_id):
 def supprimer_salle(salle_id):
     with ouvrir_base() as conn:
         conn.execute("DELETE FROM salles WHERE id = ?", [salle_id])
+    return redirect("/")
+
+
+def minutes(heure):
+    h, m = heure.split(":")
+    return int(h) * 60 + int(m)
+
+
+# Réserve une salle au nom d'une personne, en respectant les règles métier.
+@app.post("/reservations")
+def reserver():
+    f = request.form
+    salle_id = int(f["salle_id"])
+    debut, fin = f["debut"], f["fin"]
+    participants = int(f["participants"])
+    if debut < "08:00" or fin > "20:00":
+        return "La réservation doit avoir lieu entre 8 h et 20 h.", 400
+    if not 30 <= minutes(fin) - minutes(debut) <= 240:
+        return "La réservation doit durer de 30 min à 4 h.", 400
+    with ouvrir_base() as conn:
+        salle = conn.execute("SELECT capacite FROM salles WHERE id = ?", [salle_id]).fetchone()
+        if salle is None:
+            return "Salle inconnue.", 404
+        if participants > salle["capacite"]:
+            return "Trop de participants pour cette salle.", 400
+        conflit = conn.execute(
+            "SELECT 1 FROM reservations WHERE salle_id = ? AND date = ? AND debut < ? AND fin > ?",
+            [salle_id, f["date"], fin, debut],
+        ).fetchone()
+        if conflit:
+            return "La salle est déjà réservée sur ce créneau.", 400
+        conn.execute(
+            "INSERT INTO reservations (salle_id, personne, date, debut, fin, participants)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            [salle_id, f["personne"], f["date"], debut, fin, participants],
+        )
     return redirect("/")
 
 
