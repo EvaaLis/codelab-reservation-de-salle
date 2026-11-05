@@ -28,6 +28,18 @@ PAGE = """
   <button>Ajouter</button>
 </form>
 
+<h2>Réservations</h2>
+<ul>
+  {% for r in reservations %}
+    <li>
+      {{ r["nom"] }} – {{ r["date"] }} {{ r["debut"] }}-{{ r["fin"] }} – {{ r["personne"] }} ({{ r["participants"] }})
+      <form method="post" action="/reservations/{{ r['id'] }}/annuler" style="display:inline">
+        <button>Annuler</button>
+      </form>
+    </li>
+  {% endfor %}
+</ul>
+
 <h2>Réserver</h2>
 <form method="post" action="/reservations">
   <select name="salle_id">
@@ -52,7 +64,11 @@ app = Flask(__name__)
 def accueil():
     with ouvrir_base() as conn:
         salles = conn.execute("SELECT id, nom, capacite FROM salles").fetchall()
-    return render_template_string(PAGE, salles=salles)
+        reservations = conn.execute(
+            "SELECT r.id, s.nom, r.date, r.debut, r.fin, r.personne, r.participants"
+            " FROM reservations r JOIN salles s ON s.id = r.salle_id ORDER BY r.date, r.debut"
+        ).fetchall()
+    return render_template_string(PAGE, salles=salles, reservations=reservations)
 
 
 # Exemple : reçoit le formulaire et ajoute une salle.
@@ -123,6 +139,14 @@ def reserver():
             " VALUES (?, ?, ?, ?, ?, ?)",
             [salle_id, f["personne"], f["date"], debut, fin, participants],
         )
+    return redirect("/")
+
+
+# Annule (supprime) une réservation.
+@app.post("/reservations/<int:reservation_id>/annuler")
+def annuler(reservation_id):
+    with ouvrir_base() as conn:
+        conn.execute("DELETE FROM reservations WHERE id = ?", [reservation_id])
     return redirect("/")
 
 

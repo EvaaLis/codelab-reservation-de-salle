@@ -83,3 +83,17 @@ def test_reserver_duree_hors_limites_refusee(client):
     assert reserver(client, debut="14:00", fin="14:20").status_code == 400
     assert reserver(client, debut="14:00", fin="18:30").status_code == 400
     assert nb_reservations() == 1
+
+
+def test_accueil_affiche_reservation(client):
+    assert "Alice" in client.get("/").get_data(as_text=True)
+
+
+def test_annuler_reservation(client):
+    assert client.post("/reservations/1/annuler").status_code == 302
+    assert nb_reservations() == 0
+
+
+def test_annuler_libere_le_creneau(client):
+    client.post("/reservations/1/annuler")
+    assert reserver(client, debut="10:00", fin="12:00").status_code == 302
