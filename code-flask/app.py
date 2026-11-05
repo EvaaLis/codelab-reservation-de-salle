@@ -4,21 +4,58 @@ from flask import Flask, redirect, render_template_string, request
 
 from base import ouvrir_base
 
+# Style commun aux pages (CSS intégré, aucune dépendance).
+STYLE = """
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --fond: #f4f6fa; --carte: #fff; --texte: #1f2937; --doux: #6b7280;
+          --accent: #2563eb; --danger: #dc2626; --bord: #e5e7eb; }
+  body { font-family: system-ui, sans-serif; background: var(--fond); color: var(--texte);
+         max-width: 900px; margin: 0 auto; padding: 24px 16px; line-height: 1.5; }
+  h1 { color: var(--accent); margin-top: 0; }
+  h2 { margin-top: 32px; border-bottom: 2px solid var(--bord); padding-bottom: 4px; }
+  h3 { margin: 0 0 8px; font-size: 1rem; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { background: var(--carte); border: 1px solid var(--bord); border-radius: 8px;
+       padding: 10px 12px; margin-bottom: 8px; display: flex; flex-wrap: wrap;
+       align-items: center; gap: 8px; }
+  form { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
+  body > form { background: var(--carte); border: 1px solid var(--bord); border-radius: 8px;
+                padding: 12px; }
+  input, select { padding: 6px 8px; border: 1px solid var(--bord); border-radius: 6px;
+                  font: inherit; }
+  input[type=number] { width: 7em; }
+  button { padding: 6px 12px; border: 0; border-radius: 6px; background: var(--accent);
+           color: #fff; font: inherit; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  button.danger { background: var(--danger); }
+  a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  a:hover { text-decoration: underline; }
+  .infos { flex: 1; }
+  .jours { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+           gap: 12px; margin-top: 16px; }
+  .jour { background: var(--carte); border: 1px solid var(--bord); border-radius: 8px;
+          padding: 12px; }
+  .jour li { background: #eff6ff; border-color: #bfdbfe; }
+  .jour li.libre { background: none; border-style: dashed; color: var(--doux); }
+</style>
+"""
+
 # Le HTML de la page.
-PAGE = """
+PAGE = STYLE + """
 <h1>Réservation de salles</h1>
 
 <h2>Salles</h2>
 <ul>
   {% for salle in salles %}
     <li>
-      <form method="post" action="/salles/{{ salle['id'] }}/modifier" style="display:inline">
+      <form method="post" action="/salles/{{ salle['id'] }}/modifier">
         <input name="nom" value="{{ salle['nom'] }}" required>
         <input name="capacite" type="number" min="1" value="{{ salle['capacite'] }}" required>
         <button>Modifier</button>
       </form>
-      <form method="post" action="/salles/{{ salle['id'] }}/supprimer" style="display:inline">
-        <button>Supprimer</button>
+      <form method="post" action="/salles/{{ salle['id'] }}/supprimer">
+        <button class="danger">Supprimer</button>
       </form>
       <a href="/salles/{{ salle['id'] }}/planning">Planning</a>
     </li>
@@ -35,9 +72,9 @@ PAGE = """
 <ul>
   {% for r in reservations %}
     <li>
-      {{ r["nom"] }} – {{ r["date"] }} {{ r["debut"] }}-{{ r["fin"] }} – {{ r["personne"] }} ({{ r["participants"] }})
-      <form method="post" action="/reservations/{{ r['id'] }}/annuler" style="display:inline">
-        <button>Annuler</button>
+      <span class="infos"><strong>{{ r["nom"] }}</strong> – {{ r["date"] }} {{ r["debut"] }}-{{ r["fin"] }} – {{ r["personne"] }} ({{ r["participants"] }} pers.)</span>
+      <form method="post" action="/reservations/{{ r['id'] }}/annuler">
+        <button class="danger">Annuler</button>
       </form>
     </li>
   {% endfor %}
@@ -60,7 +97,7 @@ PAGE = """
 """
 
 # Le HTML du planning d'une salle.
-PLANNING = """
+PLANNING = STYLE + """
 <h1>Planning de {{ salle["nom"] }}</h1>
 <p><a href="/">Retour</a></p>
 
@@ -69,16 +106,20 @@ PLANNING = """
   <button>Voir la semaine</button>
 </form>
 
+<div class="jours">
 {% for jour in jours %}
-  <h3>{{ jour["nom"] }} {{ jour["date"] }}</h3>
-  <ul>
-    {% for r in jour["reservations"] %}
-      <li>{{ r["debut"] }}-{{ r["fin"] }} – {{ r["personne"] }} ({{ r["participants"] }})</li>
-    {% else %}
-      <li>Libre</li>
-    {% endfor %}
-  </ul>
+  <div class="jour">
+    <h3>{{ jour["nom"] }} {{ jour["date"] }}</h3>
+    <ul>
+      {% for r in jour["reservations"] %}
+        <li><strong>{{ r["debut"] }}-{{ r["fin"] }}</strong> {{ r["personne"] }} ({{ r["participants"] }} pers.)</li>
+      {% else %}
+        <li class="libre">Libre</li>
+      {% endfor %}
+    </ul>
+  </div>
 {% endfor %}
+</div>
 """
 
 NOMS_JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
