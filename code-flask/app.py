@@ -202,6 +202,12 @@ def reserver():
         ).fetchone()
         if conflit:
             return "La salle est déjà réservée sur ce créneau.", 400
+        deja_occupee = conn.execute(
+            "SELECT 1 FROM reservations WHERE personne = ? AND date = ? AND debut < ? AND fin > ?",
+            [f["personne"], f["date"], fin, debut],
+        ).fetchone()
+        if deja_occupee:
+            return "Cette personne a déjà une réservation sur ce créneau.", 400
         conn.execute(
             "INSERT INTO reservations (salle_id, personne, date, debut, fin, participants)"
             " VALUES (?, ?, ?, ?, ?, ?)",

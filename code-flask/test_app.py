@@ -117,3 +117,18 @@ def test_planning_affiche_seulement_la_salle(client):
 
 def test_planning_salle_inconnue(client):
     assert client.get("/salles/99/planning").status_code == 404
+
+
+# Une personne ne peut pas avoir deux réservations qui se chevauchent (Alice : S1, lundi 10:00-12:00).
+def test_personne_chevauchement_autre_salle_refuse(client):
+    reponse = reserver(client, salle_id="2", personne="Alice", debut="11:00", fin="13:00")
+    assert reponse.status_code == 400
+    assert nb_reservations() == 1
+
+
+def test_personne_bout_a_bout_autorise(client):
+    assert reserver(client, salle_id="2", personne="Alice", debut="12:00", fin="13:00").status_code == 302
+
+
+def test_autre_personne_meme_creneau_autre_salle_autorise(client):
+    assert reserver(client, salle_id="2", personne="Bob", debut="11:00", fin="12:00").status_code == 302
