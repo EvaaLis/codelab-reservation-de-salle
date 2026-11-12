@@ -132,3 +132,20 @@ def test_personne_bout_a_bout_autorise(client):
 
 def test_autre_personne_meme_creneau_autre_salle_autorise(client):
     assert reserver(client, salle_id="2", personne="Bob", debut="11:00", fin="12:00").status_code == 302
+
+
+# Type de local.
+def test_ajouter_salle_avec_type(client):
+    client.post("/salles", data={"nom": "Labo", "capacite": "12", "type": "Laboratoire"})
+    assert lire("SELECT type FROM salles WHERE nom = 'Labo'")[0][0] == "Laboratoire"
+
+
+def test_modifier_type_salle(client):
+    client.post("/salles/2/modifier", data={"nom": "S2", "capacite": "8", "type": "Auditoire"})
+    assert lire("SELECT type FROM salles WHERE id = 2")[0][0] == "Auditoire"
+
+
+def test_type_inconnu_refuse(client):
+    reponse = client.post("/salles", data={"nom": "X", "capacite": "5", "type": "Piscine"})
+    assert reponse.status_code == 400
+    assert lire("SELECT * FROM salles WHERE nom = 'X'") == []

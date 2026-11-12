@@ -52,6 +52,11 @@ PAGE = STYLE + """
       <form method="post" action="/salles/{{ salle['id'] }}/modifier">
         <input name="nom" value="{{ salle['nom'] }}" required>
         <input name="capacite" type="number" min="1" value="{{ salle['capacite'] }}" required>
+        <select name="type">
+          {% for t in types %}
+            <option {% if t == salle['type'] %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
         <button>Modifier</button>
       </form>
       <form method="post" action="/salles/{{ salle['id'] }}/supprimer">
@@ -65,6 +70,9 @@ PAGE = STYLE + """
 <form method="post" action="/salles">
   <input name="nom" placeholder="Nom" required>
   <input name="capacite" type="number" min="1" placeholder="Capacité" required>
+  <select name="type">
+    {% for t in types %}<option>{{ t }}</option>{% endfor %}
+  </select>
   <button>Ajouter</button>
 </form>
 
@@ -122,6 +130,8 @@ PLANNING = STYLE + """
 </div>
 """
 
+TYPES = ["Classe", "Auditoire", "Laboratoire", "Salle de réunion"]
+
 NOMS_JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 app = Flask(__name__)
@@ -131,12 +141,12 @@ app = Flask(__name__)
 @app.get("/")
 def accueil():
     with ouvrir_base() as conn:
-        salles = conn.execute("SELECT id, nom, capacite FROM salles").fetchall()
+        salles = conn.execute("SELECT id, nom, capacite, type FROM salles").fetchall()
         reservations = conn.execute(
             "SELECT r.id, s.nom, r.date, r.debut, r.fin, r.personne, r.participants"
             " FROM reservations r JOIN salles s ON s.id = r.salle_id ORDER BY r.date, r.debut"
         ).fetchall()
-    return render_template_string(PAGE, salles=salles, reservations=reservations)
+    return render_template_string(PAGE, salles=salles, reservations=reservations, types=TYPES)
 
 
 # Exemple : reçoit le formulaire et ajoute une salle.
@@ -144,8 +154,13 @@ def accueil():
 def ajouter_salle():
     nom = request.form["nom"]
     capacite = int(request.form["capacite"])
+    type_local = request.form.get("type", "Classe")
+    if type_local not in TYPES:
+        return "Type de local inconnu.", 400
     with ouvrir_base() as conn:
-        conn.execute("INSERT INTO salles (nom, capacite) VALUES (?, ?)", [nom, capacite])
+        conn.execute(
+            "INSERT INTO salles (nom, capacite, type) VALUES (?, ?, ?)", [nom, capacite, type_local]
+        )
     return redirect("/")
 
 
@@ -154,6 +169,9 @@ def ajouter_salle():
 def modifier_salle(salle_id):
     nom = request.form["nom"]
     capacite = int(request.form["capacite"])
+    type_local = request.form.get("type", "Classe")
+    if type_local not in TYPES:
+        return "Type de local inconnu.", 400
     with ouvrir_base() as conn:
         max_participants = conn.execute(
             "SELECT MAX(participants) FROM reservations WHERE salle_id = ?", [salle_id]
@@ -161,7 +179,8 @@ def modifier_salle(salle_id):
         if max_participants is not None and capacite < max_participants:
             return "Capacité inférieure au nombre de participants d'une réservation.", 400
         conn.execute(
-            "UPDATE salles SET nom = ?, capacite = ? WHERE id = ?", [nom, capacite, salle_id]
+            "UPDATE salles SET nom = ?, capacite = ?, type = ? WHERE id = ?",
+            [nom, capacite, type_local, salle_id],
         )
     return redirect("/")
 
