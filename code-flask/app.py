@@ -100,6 +100,9 @@ PAGE = STYLE + """
   <input name="debut" type="time" required>
   <input name="fin" type="time" required>
   <input name="participants" type="number" min="1" placeholder="Participants" required>
+  <label>Nombre de semaines
+    <input name="semaines" type="number" min="1" max="52" value="1" required>
+  </label>
   <button>Réserver</button>
 </form>
 """
@@ -205,6 +208,11 @@ def reserver():
     salle_id = int(f["salle_id"])
     debut, fin = f["debut"], f["fin"]
     participants = int(f["participants"])
+    semaines = int(f.get("semaines", 1))
+    if not 1 <= semaines <= 52:
+        return "Le nombre de semaines doit être entre 1 et 52.", 400
+    premier_jour = date.fromisoformat(f["date"])
+    dates = [(premier_jour + timedelta(weeks=i)).isoformat() for i in range(semaines)]
     if debut < "08:00" or fin > "20:00":
         return "La réservation doit avoir lieu entre 8 h et 20 h.", 400
     if not 30 <= minutes(fin) - minutes(debut) <= 240:
@@ -215,23 +223,26 @@ def reserver():
             return "Salle inconnue.", 404
         if participants > salle["capacite"]:
             return "Trop de participants pour cette salle.", 400
-        conflit = conn.execute(
-            "SELECT 1 FROM reservations WHERE salle_id = ? AND date = ? AND debut < ? AND fin > ?",
-            [salle_id, f["date"], fin, debut],
-        ).fetchone()
-        if conflit:
-            return "La salle est déjà réservée sur ce créneau.", 400
-        deja_occupee = conn.execute(
-            "SELECT 1 FROM reservations WHERE personne = ? AND date = ? AND debut < ? AND fin > ?",
-            [f["personne"], f["date"], fin, debut],
-        ).fetchone()
-        if deja_occupee:
-            return "Cette personne a déjà une réservation sur ce créneau.", 400
-        conn.execute(
-            "INSERT INTO reservations (salle_id, personne, date, debut, fin, participants)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            [salle_id, f["personne"], f["date"], debut, fin, participants],
-        )
+        # On vérifie toutes les semaines avant de créer quoi que ce soit.
+        for jour in dates:
+            conflit = conn.execute(
+                "SELECT 1 FROM reservations WHERE salle_id = ? AND date = ? AND debut < ? AND fin > ?",
+                [salle_id, jour, fin, debut],
+            ).fetchone()
+            if conflit:
+                return f"La salle est déjà réservée sur ce créneau le {jour}.", 400
+            deja_occupee = conn.execute(
+                "SELECT 1 FROM reservations WHERE personne = ? AND date = ? AND debut < ? AND fin > ?",
+                [f["personne"], jour, fin, debut],
+            ).fetchone()
+            if deja_occupee:
+                return f"Cette personne a déjà une réservation sur ce créneau le {jour}.", 400
+        for jour in dates:
+            conn.execute(
+                "INSERT INTO reservations (salle_id, personne, date, debut, fin, participants)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                [salle_id, f["personne"], jour, debut, fin, participants],
+            )
     return redirect("/")
 
 

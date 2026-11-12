@@ -149,3 +149,31 @@ def test_type_inconnu_refuse(client):
     reponse = client.post("/salles", data={"nom": "X", "capacite": "5", "type": "Piscine"})
     assert reponse.status_code == 400
     assert lire("SELECT * FROM salles WHERE nom = 'X'") == []
+
+
+# Réservations répétées chaque semaine (Alice : S1, lundi 2026-11-09 10:00-12:00).
+def test_reservation_repetee_chaque_semaine(client):
+    assert reserver(client, date="2026-11-10", semaines="3").status_code == 302
+    dates = [r[0] for r in lire("SELECT date FROM reservations WHERE personne = 'Bob' ORDER BY date")]
+    assert dates == ["2026-11-10", "2026-11-17", "2026-11-24"]
+
+
+def test_reservation_repetee_conflit_salle_refuse_tout(client):
+    # La 2e semaine (lundi 16) est libre, mais on démarre le lundi 2 : le 9 est en conflit.
+    reponse = reserver(client, date="2026-11-02", debut="11:00", fin="13:00", semaines="3")
+    assert reponse.status_code == 400
+    assert "2026-11-09" in reponse.get_data(as_text=True)
+    assert nb_reservations() == 1
+
+
+def test_reservation_repetee_conflit_personne_refuse_tout(client):
+    reponse = reserver(client, salle_id="2", personne="Alice", date="2026-11-02",
+                       debut="11:00", fin="12:00", participants="3", semaines="2")
+    assert reponse.status_code == 400
+    assert nb_reservations() == 1
+
+
+def test_reservation_repetee_nombre_semaines_hors_limites(client):
+    assert reserver(client, semaines="0").status_code == 400
+    assert reserver(client, semaines="53").status_code == 400
+    assert nb_reservations() == 1
